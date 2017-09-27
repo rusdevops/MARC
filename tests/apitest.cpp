@@ -19,8 +19,8 @@
  */
 
 #include "gtest/gtest.h"
-#include "../marc_api.h"
-#include "../memory_storage.h"
+#include "marc_api.h"
+#include "memory_storage.h"
 
 using namespace std;
 

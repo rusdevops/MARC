@@ -1,84 +1,96 @@
-project(MARC-FS)
-cmake_minimum_required(VERSION 2.8)
-aux_source_directory(. SRC_LIST)
+cmake_minimum_required(VERSION 3.3)
 
-# C++ standard
-set(CMAKE_CXX_STANDARD 14)
-MESSAGE(STATUS "Cmake system: " ${CMAKE_SYSTEM} )
-MESSAGE(STATUS "Cmake arch: " ${CMAKE_SYSTEM_PROCESSOR} )
-
-# custom compile flags
-set(FUSE_REQUIRED_FLAGS "-D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FUSE_REQUIRED_FLAGS}")
-
-# modules
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules")
-
-#                            #
-# internal libs and packages #
-#                            #
-
-# Curl C++ bindings
-ADD_SUBDIRECTORY(contrib/curlcpp EXCLUDE_FROM_ALL)
-INCLUDE_DIRECTORIES(${CURLCPP_SOURCE_DIR}/include)
-
-# Googletest bindings
-ADD_SUBDIRECTORY(contrib/googletest/googletest EXCLUDE_FROM_ALL)
-INCLUDE_DIRECTORIES(${gtest_SOURCE_DIR}/include)
-
-#                            #
-# external libs and packages #
-#                            #
-
-# FUSE
-find_package(FUSE REQUIRED)
-if(NOT FUSE_FOUND)
-    message(SEND_ERROR "Failed to find fuse")
-    return()
-else()
-    include_directories(${FUSE_INCLUDE_DIR})
-endif()
-
-# JSONCPP
-find_package(JSONCPP REQUIRED)
-if (NOT JSONCPP_FOUND)
-    message(SEND_ERROR "Failed to find jsoncpp")
-    return()
-else()
-    include_directories(${JSONCPP_INCLUDE_DIR})
-endif()
-
-# JEMALLOC - optional
-find_package(JEMALLOC)
-if(JEMALLOC_FOUND)
-  include_directories(${JEMALLOC_INCLUDE_DIRS})
-else()
-    message(WARNING "jemalloc not found but highly recommended")
-endif()
-
-# first, run tests
-set(SRC_NO_MAIN ${SRC_LIST})
-list(REMOVE_ITEM SRC_NO_MAIN ./main.cpp)
-add_executable(apitest ${SRC_NO_MAIN} tests/apitest.cpp)
-target_link_libraries(apitest
-    gtest_main
-    curlcpp
-    ${JSONCPP_LIBRARIES}
-    ${FUSE_LIBRARIES})
-add_test(NAME rest_api_test COMMAND apitest)
-
-# final binary
-add_executable(marcfs ${SRC_LIST})
-target_link_libraries(marcfs
-    curlcpp
-    pthread
-    ${JSONCPP_LIBRARIES}
-    ${FUSE_LIBRARIES}
+include("cmake/HunterGate.cmake")
+HunterGate(
+    URL "https://github.com/rusdevops/hunter/archive/v0.19.109.6.tar.gz"
+    SHA1 "1d5ec3d14107ef4fd5ac40af1ab9aa82680fdbe3"
 )
 
-# optional libs
-if(JEMALLOC_FOUND)
-    target_link_libraries(marcfs ${JEMALLOC_LIBRARIES})
+set(MARC_VERSION_MAJOR 0)
+set(MARC_VERSION_MINOR 4)
+set(MARC_VERSION_PATCH 0)
+set(MARC_VERSION ${MARC_VERSION_MAJOR}.${MARC_VERSION_MINOR}.${MARC_VERSION_PATCH})
+
+project(MARC VERSION ${MARC_VERSION})
+
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+option(BUILD_TESTS "Build tests" OFF)
+
+hunter_add_package(CURLCPP)
+find_package(CURLCPP CONFIG REQUIRED)
+
+hunter_add_package(jsoncpp)
+find_package(jsoncpp CONFIG REQUIRED)
+
+
+file(GLOB ${PROJECT_NAME}_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/sources/*.cpp")
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/)
+
+add_library(libmarc ${${PROJECT_NAME}_SOURCES})
+set_target_properties(libmarc PROPERTIES PREFIX "")
+set_target_properties(libmarc PROPERTIES IMPORT_PREFIX "")
+
+
+target_link_libraries(libmarc jsoncpp_lib_static CURLCPP::libcurlcpp)
+
+target_include_directories(libmarc PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+# Install
+
+set(GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+
+set(CONFIG_INSTALL_DIR "lib/cmake/${PROJECT_NAME}")
+set(INCLUDE_INSTALL_DIR "include")
+
+set(VERSION_CONFIG "${GENERATED_DIR}/${PROJECT_NAME}ConfigVersion.cmake")
+set(PROJECT_CONFIG "${GENERATED_DIR}/${PROJECT_NAME}Config.cmake")
+set(TARGETS_EXPORT_NAME "${PROJECT_NAME}Targets")
+set(NAMESPACE "${PROJECT_NAME}::")
+
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+    "${VERSION_CONFIG}" COMPATIBILITY SameMajorVersion
+)
+
+configure_package_config_file(
+    "${PROJECT_SOURCE_DIR}/cmake/Config.cmake.in"
+    "${PROJECT_CONFIG}"
+     INSTALL_DESTINATION "${CONFIG_INSTALL_DIR}"
+)
+
+install(TARGETS libmarc
+    EXPORT "${TARGETS_EXPORT_NAME}"
+    RUNTIME DESTINATION bin
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ DESTINATION include)
+
+install(
+  FILES "${PROJECT_CONFIG}" "${VERSION_CONFIG}"
+  DESTINATION "${CONFIG_INSTALL_DIR}"
+  )
+
+install(EXPORT "${TARGETS_EXPORT_NAME}" 
+    NAMESPACE "${NAMESPACE}" 
+    DESTINATION "${CONFIG_INSTALL_DIR}"
+)
+
+if(BUILD_TESTS)
+	hunter_add_package(GTest)
+	find_package(GTest CONFIG REQUIRED)
+	enable_testing()
+	file(GLOB ${PROJECT_NAME}_TEST_SOURCES tests/*.cpp)
+	add_executable(check ${${PROJECT_NAME}_TEST_SOURCES})
+	target_link_libraries(check libmarc GTest::main) 
+	add_test(NAME check COMMAND check) 
 endif()
 
-install(TARGETS marcfs RUNTIME DESTINATION bin)
+
+
