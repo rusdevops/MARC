@@ -64,6 +64,8 @@ MarcRestClient::MarcRestClient()
 {
     cookieStore.set_file(""); // init cookie engine
     restClient->reset(); // reset debug->std:cout function
+    restClient->add<CURLOPT_SSL_VERIFYHOST>(0);
+    restClient->add<CURLOPT_SSL_VERIFYPEER>(0);
 }
 
 
