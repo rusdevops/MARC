@@ -64,9 +64,6 @@ MarcRestClient::MarcRestClient()
 {
     cookieStore.set_file(""); // init cookie engine
     restClient->reset(); // reset debug->std:cout function
-    restClient->add<CURLOPT_SSL_VERIFYPEER>(0);
-    restClient->add<CURLOPT_SSL_VERIFYHOST>(0);
-    restClient->add<CURLOPT_CAINFO>("cacrt.pem");
 }
 
 
@@ -127,6 +124,8 @@ string MarcRestClient::performPost()
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
+    restClient->add<CURLOPT_SSL_VERIFYPEER>(0);
+    restClient->add<CURLOPT_SSL_VERIFYHOST>(0);
     restClient->add<CURLOPT_VERBOSE>(verbose);
     restClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
 
@@ -161,6 +160,8 @@ void MarcRestClient::performGet(Container &target)
     restClient->add<CURLOPT_VERBOSE>(verbose);
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
+    restClient->add<CURLOPT_SSL_VERIFYPEER>(0);
+    restClient->add<CURLOPT_SSL_VERIFYHOST>(0);
     restClient->add<CURLOPT_WRITEDATA>(&target);
     restClient->add<CURLOPT_WRITEFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
         auto result = static_cast<Container *>(userp);
